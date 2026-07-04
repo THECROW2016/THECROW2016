@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase, Visit, Patient, Department, QueueEntry } from '../lib/supabase';
+import { supabase, Visit, Patient, Department } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
 import {
   Users,
@@ -7,7 +7,6 @@ import {
   Clock,
   Activity,
   TrendingUp,
-  TrendingDown,
   AlertTriangle,
   CheckCircle2,
   Stethoscope,
@@ -27,7 +26,6 @@ export function DashboardPage() {
   const [recentVisits, setRecentVisits] = useState<(Visit & { patient: Patient })[]>([]);
   const [queueByDepartment, setQueueByDepartment] = useState<Record<string, number>>({});
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchDashboardData();
@@ -36,7 +34,6 @@ export function DashboardPage() {
   }, []);
 
   const fetchDashboardData = async () => {
-    setLoading(true);
     try {
       // Fetch total patients
       const { count: totalPatients } = await supabase.from('patients').select('id', { count: 'exact', head: true });
@@ -97,8 +94,6 @@ export function DashboardPage() {
       }
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
-    } finally {
-      setLoading(false);
     }
   };
 

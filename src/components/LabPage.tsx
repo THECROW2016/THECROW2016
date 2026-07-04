@@ -5,7 +5,6 @@ import {
   TestTube,
   Clock,
   User,
-  AlertTriangle,
   Send,
   FileText,
   CheckCircle2,
@@ -14,7 +13,7 @@ import {
 } from 'lucide-react';
 
 export function LabPage() {
-  const { profile } = useAuth();
+  useAuth();
   const [queue, setQueue] = useState<(QueueEntry & { visit: Visit & { patient: any } })[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [selectedEntry, setSelectedEntry] = useState<(QueueEntry & { visit: Visit & { patient: any } }) | null>(null);

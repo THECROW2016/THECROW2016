@@ -2,18 +2,15 @@ import { useState, useEffect } from 'react';
 import { supabase, QueueEntry, Department } from '../lib/supabase';
 import {
   Monitor,
-  Clock,
   Volume2,
   RefreshCw,
   Settings,
-  User,
   CheckCircle2,
   Bell,
-  Building2,
 } from 'lucide-react';
 
 export function QueueDisplayPage() {
-  const [currentCalling, setCurrentCalling] = useState<(QueueEntry & { visit: any; department: any })[]>([]);
+  const [currentCalling] = useState<(QueueEntry & { visit: any; department: any })[]>([]);
   const [allQueues, setAllQueues] = useState<Record<string, (QueueEntry & { visit: any; department: any })[]>>({});
   const [departments, setDepartments] = useState<Department[]>([]);
   const [recentlyCalled, setRecentlyCalled] = useState<{ ticket: string; patient: string; room: string; time: Date }[]>([]);

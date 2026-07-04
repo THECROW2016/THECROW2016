@@ -5,10 +5,8 @@ import {
   Users,
   UserPlus,
   Edit,
-  Trash2,
   Building,
   Shield,
-  Mail,
   Search,
   CheckCircle2,
   XCircle,
@@ -22,7 +20,7 @@ type UserForm = {
 };
 
 export function AdminPage() {
-  const { profile } = useAuth();
+  useAuth();
   const [activeTab, setActiveTab] = useState<'users' | 'departments'>('users');
   const [users, setUsers] = useState<Profile[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);

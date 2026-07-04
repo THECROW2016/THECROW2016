@@ -1,17 +1,11 @@
 import { useState, useEffect } from 'react';
-import { supabase, Visit, QueueEntry, Department, VisitStep } from '../lib/supabase';
+import { supabase, Visit, QueueEntry, Department } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
 import {
   Activity,
-  ArrowRight,
   Clock,
   Heart,
-  Thermometer,
-  Weight,
-  Ruler,
-  Stethoscope,
   AlertTriangle,
-  CheckCircle2,
   User,
   Send,
 } from 'lucide-react';
@@ -29,7 +23,7 @@ type VitalSigns = {
 };
 
 export function TriagePage() {
-  const { profile } = useAuth();
+  useAuth();
   const [queue, setQueue] = useState<(QueueEntry & { visit: Visit & { patient: any } })[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [selectedEntry, setSelectedEntry] = useState<(QueueEntry & { visit: Visit & { patient: any } }) | null>(null);
@@ -85,28 +79,6 @@ export function TriagePage() {
   const fetchDepartments = async () => {
     const { data } = await supabase.from('departments').select('*').eq('is_active', true);
     if (data) setDepartments(data as Department[]);
-  };
-
-  const callPatient = async (entry: typeof queue[0]) => {
-    setLoading(true);
-    await supabase
-      .from('queue_entries')
-      .update({ is_called: true, called_at: new Date().toISOString() })
-      .eq('id', entry.id);
-
-    await supabase
-      .from('visits')
-      .update({ status: 'in_progress' })
-      .eq('id', entry.visit_id);
-
-    await supabase
-      .from('visit_steps')
-      .update({ started_at: new Date().toISOString(), status: 'in_progress', assigned_staff_id: profile?.id })
-      .eq('visit_id', entry.visit_id)
-      .eq('department_id', entry.department_id);
-
-    fetchQueue();
-    setLoading(false);
   };
 
   const completeTriage = async () => {

@@ -6,12 +6,8 @@ import {
   UserPlus,
   Ticket,
   Clock,
-  AlertTriangle,
-  CheckCircle2,
-  ArrowRight,
   Phone,
   Mail,
-  Calendar,
   MapPin,
   Users,
 } from 'lucide-react';

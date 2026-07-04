@@ -12,11 +12,10 @@ import {
   FileText,
   Pill,
   TestTube,
-  ArrowRight,
 } from 'lucide-react';
 
 export function ConsultationPage() {
-  const { profile } = useAuth();
+  useAuth();
   const [queue, setQueue] = useState<(QueueEntry & { visit: Visit & { patient: any } })[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [selectedEntry, setSelectedEntry] = useState<(QueueEntry & { visit: Visit & { patient: any } }) | null>(null);

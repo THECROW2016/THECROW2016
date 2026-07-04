@@ -1,26 +1,22 @@
 import { useState, useEffect } from 'react';
-import { supabase, Visit, QueueEntry, Department } from '../lib/supabase';
+import { supabase, Visit, QueueEntry } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
 import {
   Pill,
   Clock,
   User,
-  Send,
-  FileText,
   CheckCircle2,
   ClipboardList,
   Package,
 } from 'lucide-react';
 
 export function PharmacyPage() {
-  const { profile } = useAuth();
+  useAuth();
   const [queue, setQueue] = useState<(QueueEntry & { visit: Visit & { patient: any } })[]>([]);
-  const [departments, setDepartments] = useState<Department[]>([]);
   const [selectedEntry, setSelectedEntry] = useState<(QueueEntry & { visit: Visit & { patient: any } }) | null>(null);
   const [loading, setLoading] = useState(false);
   const [medicationsDispensed, setMedicationsDispensed] = useState('');
   const [notes, setNotes] = useState('');
-  const [endVisit, setEndVisit] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -31,7 +27,6 @@ export function PharmacyPage() {
   const fetchData = async () => {
     const { data: depts } = await supabase.from('departments').select('*').eq('is_active', true);
     if (depts) {
-      setDepartments(depts as Department[]);
       const pharmacy = depts.find((d) => d.code === 'PHARMACY');
       if (pharmacy) {
         const { data } = await supabase
@@ -75,7 +70,6 @@ export function PharmacyPage() {
     setSelectedEntry(null);
     setMedicationsDispensed('');
     setNotes('');
-    setEndVisit(false);
     fetchData();
     setLoading(false);
   };

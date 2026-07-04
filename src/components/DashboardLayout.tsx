@@ -1,5 +1,5 @@
 import { ReactNode, useState } from 'react';
-import { useAuth, isAdmin } from '../lib/auth';
+import { useAuth } from '../lib/auth';
 import {
   LayoutDashboard,
   Users,
