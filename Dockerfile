@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y \
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci --build-from-source
+RUN npm install --build-from-source
 
 # Copy source files
 COPY . .
