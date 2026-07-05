@@ -9,10 +9,11 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
-    "start": "node server.ts"
+    "start": "tsx server.ts"
   },
   "dependencies": {
     "better-sqlite3": "^11.3.0",
+    "tsx": "^4.19.1",
     "cors": "^2.8.5",
     "express": "^4.21.0",
     "lucide-react": "^0.344.0",
