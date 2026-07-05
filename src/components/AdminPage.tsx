@@ -1,5 +1,12 @@
 import { useState, useEffect } from 'react';
-import { supabase, Profile, Department } from '../lib/supabase';
+import {
+  getProfiles,
+  getDepartments,
+  createProfile,
+  updateProfile,
+  Profile,
+  Department,
+} from '../lib/api';
 import { useAuth } from '../lib/auth';
 import {
   Users,
@@ -41,13 +48,21 @@ export function AdminPage() {
   }, []);
 
   const fetchUsers = async () => {
-    const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
-    if (data) setUsers(data as Profile[]);
+    try {
+      const data = await getProfiles();
+      setUsers(data);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const fetchDepartments = async () => {
-    const { data } = await supabase.from('departments').select('*').order('display_order');
-    if (data) setDepartments(data as Department[]);
+    try {
+      const data = await getDepartments();
+      setDepartments(data);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const handleCreateUser = async () => {
@@ -55,34 +70,16 @@ export function AdminPage() {
     setLoading(true);
 
     try {
-      // Generate a random password for the user
-      const tempPassword = Math.random().toString(36).slice(-8) + 'A1!';
-
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      await createProfile({
         email: userForm.email,
-        password: tempPassword,
+        full_name: userForm.full_name,
+        role: userForm.role,
+        department_id: userForm.department_id || null,
       });
 
-      if (authError) throw authError;
-
-      if (authData.user) {
-        // Profile is created automatically via trigger or we need to create it
-        const { error: profileError } = await supabase.from('profiles').upsert({
-          id: authData.user.id,
-          email: userForm.email,
-          full_name: userForm.full_name,
-          role: userForm.role,
-          department_id: userForm.department_id || null,
-          is_active: true,
-        });
-
-        if (profileError) throw profileError;
-
-        alert(`User created! Temporary password: ${tempPassword}`);
-        fetchUsers();
-        setShowUserForm(false);
-        setUserForm({ email: '', full_name: '', role: 'receptionist', department_id: '' });
-      }
+      fetchUsers();
+      setShowUserForm(false);
+      setUserForm({ email: '', full_name: '', role: 'receptionist', department_id: '' });
     } catch (err) {
       console.error(err);
       alert(err instanceof Error ? err.message : 'Failed to create user');
@@ -96,16 +93,11 @@ export function AdminPage() {
     setLoading(true);
 
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          full_name: userForm.full_name,
-          role: userForm.role,
-          department_id: userForm.department_id || null,
-        })
-        .eq('id', editingUser.id);
-
-      if (error) throw error;
+      await updateProfile(editingUser.id, {
+        full_name: userForm.full_name,
+        role: userForm.role,
+        department_id: userForm.department_id || null,
+      });
       fetchUsers();
       setEditingUser(null);
       setShowUserForm(false);
@@ -120,7 +112,7 @@ export function AdminPage() {
   const handleToggleUserStatus = async (user: Profile) => {
     setLoading(true);
     try {
-      await supabase.from('profiles').update({ is_active: !user.is_active }).eq('id', user.id);
+      await updateProfile(user.id, { is_active: !user.is_active });
       fetchUsers();
     } catch (err) {
       console.error(err);
@@ -154,7 +146,7 @@ export function AdminPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setEditingUser(null)}
+            onClick={() => setShowUserForm(true)}
             className="flex items-center gap-2 px-4 py-2 bg-cyan-600 text-white rounded-lg font-medium hover:bg-cyan-700 transition-colors"
           >
             <UserPlus className="w-4 h-4" />

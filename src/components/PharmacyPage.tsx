@@ -1,5 +1,12 @@
 import { useState, useEffect } from 'react';
-import { supabase, Visit, QueueEntry } from '../lib/supabase';
+import {
+  getQueue,
+  getDepartments,
+  updateVisitStep,
+  updateVisit,
+  deleteQueueEntry,
+  QueueEntry,
+} from '../lib/api';
 import { useAuth } from '../lib/auth';
 import {
   Pill,
@@ -12,8 +19,8 @@ import {
 
 export function PharmacyPage() {
   useAuth();
-  const [queue, setQueue] = useState<(QueueEntry & { visit: Visit & { patient: any } })[]>([]);
-  const [selectedEntry, setSelectedEntry] = useState<(QueueEntry & { visit: Visit & { patient: any } }) | null>(null);
+  const [queue, setQueue] = useState<QueueEntry[]>([]);
+  const [selectedEntry, setSelectedEntry] = useState<QueueEntry | null>(null);
   const [loading, setLoading] = useState(false);
   const [medicationsDispensed, setMedicationsDispensed] = useState('');
   const [notes, setNotes] = useState('');
@@ -25,18 +32,15 @@ export function PharmacyPage() {
   }, []);
 
   const fetchData = async () => {
-    const { data: depts } = await supabase.from('departments').select('*').eq('is_active', true);
-    if (depts) {
+    try {
+      const depts = await getDepartments();
       const pharmacy = depts.find((d) => d.code === 'PHARMACY');
       if (pharmacy) {
-        const { data } = await supabase
-          .from('queue_entries')
-          .select('*, visit:visits(*, patient:patients(*)), department:departments(*)')
-          .eq('department_id', pharmacy.id)
-          .eq('is_called', false)
-          .order('position');
-        if (data) setQueue(data as unknown as typeof queue);
+        const data = await getQueue(pharmacy.id);
+        setQueue(data.filter((e) => !e.is_called));
       }
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -46,32 +50,35 @@ export function PharmacyPage() {
 
     const pharmacyNotes = `Medications Dispensed: ${medicationsDispensed}\nNotes: ${notes}`;
 
-    await supabase
-      .from('visit_steps')
-      .update({
+    try {
+      // Update visit step
+      const steps = await fetch(`/api/visit-steps/${selectedEntry.visit_id}`).then(r => r.json());
+      const currentStep = steps.find((s: any) => s.department_id === selectedEntry.department_id);
+      if (currentStep) {
+        await updateVisitStep(currentStep.id, {
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+          notes: pharmacyNotes,
+        });
+      }
+
+      await updateVisit(selectedEntry.visit_id, {
         status: 'completed',
         completed_at: new Date().toISOString(),
         notes: pharmacyNotes,
-      })
-      .eq('visit_id', selectedEntry.visit_id)
-      .eq('department_id', selectedEntry.department_id);
+      });
 
-    await supabase
-      .from('visits')
-      .update({
-        status: 'completed',
-        completed_at: new Date().toISOString(),
-        notes: pharmacyNotes,
-      })
-      .eq('id', selectedEntry.visit_id);
+      await deleteQueueEntry(selectedEntry.id);
 
-    await supabase.from('queue_entries').delete().eq('id', selectedEntry.id);
-
-    setSelectedEntry(null);
-    setMedicationsDispensed('');
-    setNotes('');
-    fetchData();
-    setLoading(false);
+      setSelectedEntry(null);
+      setMedicationsDispensed('');
+      setNotes('');
+      fetchData();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -140,7 +147,7 @@ export function PharmacyPage() {
               </div>
 
               {/* Patient allergies warning */}
-              {selectedEntry.visit?.patient?.allergies?.length > 0 && (
+              {selectedEntry.visit?.patient?.allergies && selectedEntry.visit.patient.allergies.length > 0 && (
                 <div className="p-4 bg-red-900/30 rounded-lg border border-red-800/50">
                   <h3 className="text-sm font-medium text-red-400 mb-1 flex items-center gap-2">
                     <Pill className="w-4 h-4" />

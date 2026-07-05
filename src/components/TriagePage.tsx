@@ -1,5 +1,14 @@
 import { useState, useEffect } from 'react';
-import { supabase, Visit, QueueEntry, Department } from '../lib/supabase';
+import {
+  getQueue,
+  getDepartments,
+  updateVisitStep,
+  updateVisit,
+  deleteQueueEntry,
+  createQueueEntry,
+  QueueEntry,
+  Department,
+} from '../lib/api';
 import { useAuth } from '../lib/auth';
 import {
   Activity,
@@ -24,9 +33,9 @@ type VitalSigns = {
 
 export function TriagePage() {
   useAuth();
-  const [queue, setQueue] = useState<(QueueEntry & { visit: Visit & { patient: any } })[]>([]);
+  const [queue, setQueue] = useState<QueueEntry[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [selectedEntry, setSelectedEntry] = useState<(QueueEntry & { visit: Visit & { patient: any } }) | null>(null);
+  const [selectedEntry, setSelectedEntry] = useState<QueueEntry | null>(null);
   const [loading, setLoading] = useState(false);
   const [vitalSigns, setVitalSigns] = useState<VitalSigns>({
     blood_pressure_systolic: '',
@@ -49,36 +58,32 @@ export function TriagePage() {
   }, []);
 
   const fetchQueue = async () => {
-    const triageDept = departments.find((d) => d.code === 'TRIAGE');
-    if (!triageDept) {
-      const { data: depts } = await supabase.from('departments').select('*');
-      if (depts) {
-        setDepartments(depts as Department[]);
+    try {
+      const triageDept = departments.find((d) => d.code === 'TRIAGE');
+      if (triageDept) {
+        const data = await getQueue(triageDept.id);
+        setQueue(data.filter((e) => !e.is_called));
+      } else {
+        const depts = await getDepartments();
+        setDepartments(depts);
         const triage = depts.find((d) => d.code === 'TRIAGE');
         if (triage) {
-          const { data } = await supabase
-            .from('queue_entries')
-            .select('*, visit:visits(*, patient:patients(*)), department:departments(*)')
-            .eq('department_id', triage.id)
-            .eq('is_called', false)
-            .order('position');
-          if (data) setQueue(data as unknown as typeof queue);
+          const data = await getQueue(triage.id);
+          setQueue(data.filter((e) => !e.is_called));
         }
       }
-    } else {
-      const { data } = await supabase
-        .from('queue_entries')
-        .select('*, visit:visits(*, patient:patients(*)), department:departments(*)')
-        .eq('department_id', triageDept.id)
-        .eq('is_called', false)
-        .order('position');
-      if (data) setQueue(data as unknown as typeof queue);
+    } catch (err) {
+      console.error(err);
     }
   };
 
   const fetchDepartments = async () => {
-    const { data } = await supabase.from('departments').select('*').eq('is_active', true);
-    if (data) setDepartments(data as Department[]);
+    try {
+      const data = await getDepartments();
+      setDepartments(data.filter((d) => d.is_active));
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const completeTriage = async () => {
@@ -103,65 +108,53 @@ RR: ${vitalSigns.respiratory_rate} /min
 SpO2: ${vitalSigns.oxygen_saturation}%
 Notes: ${vitalSigns.notes}`;
 
-    // Update visit step
-    await supabase
-      .from('visit_steps')
-      .update({
-        status: 'completed',
-        completed_at: new Date().toISOString(),
-        notes,
-      })
-      .eq('visit_id', selectedEntry.visit_id)
-      .eq('department_id', selectedEntry.department_id);
+    try {
+      // Update visit step - find the step for this department
+      const steps = await fetch(`/api/visit-steps/${selectedEntry.visit_id}`).then(r => r.json());
+      const currentStep = steps.find((s: any) => s.department_id === selectedEntry.department_id);
+      if (currentStep) {
+        await updateVisitStep(currentStep.id, {
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+          notes,
+        });
+      }
 
-    // Update visit current department
-    await supabase
-      .from('visits')
-      .update({
+      // Update visit current department
+      await updateVisit(selectedEntry.visit_id, {
         current_department_id: targetDept.id,
         status: 'waiting',
         notes,
-      })
-      .eq('id', selectedEntry.visit_id);
+      });
 
-    // Delete current queue entry
-    await supabase.from('queue_entries').delete().eq('id', selectedEntry.id);
+      // Delete current queue entry
+      await deleteQueueEntry(selectedEntry.id);
 
-    // Create new queue entry for target department
-    const { data: existingQueue } = await supabase
-      .from('queue_entries')
-      .select('id')
-      .eq('department_id', targetDept.id)
-      .eq('is_called', false);
+      // Create new queue entry for target department
+      await createQueueEntry({
+        visit_id: selectedEntry.visit_id,
+        department_id: targetDept.id,
+      });
 
-    await supabase.from('queue_entries').insert({
-      visit_id: selectedEntry.visit_id,
-      department_id: targetDept.id,
-      position: (existingQueue?.length || 0) + 1,
-    });
-
-    // Update next step to in_progress
-    await supabase
-      .from('visit_steps')
-      .update({ status: 'in_progress' })
-      .eq('visit_id', selectedEntry.visit_id)
-      .eq('department_id', targetDept.id);
-
-    setSelectedEntry(null);
-    setVitalSigns({
-      blood_pressure_systolic: '',
-      blood_pressure_diastolic: '',
-      heart_rate: '',
-      temperature: '',
-      weight: '',
-      height: '',
-      respiratory_rate: '',
-      oxygen_saturation: '',
-      notes: '',
-    });
-    setTransferTo('');
-    fetchQueue();
-    setLoading(false);
+      setSelectedEntry(null);
+      setVitalSigns({
+        blood_pressure_systolic: '',
+        blood_pressure_diastolic: '',
+        heart_rate: '',
+        temperature: '',
+        weight: '',
+        height: '',
+        respiratory_rate: '',
+        oxygen_saturation: '',
+        notes: '',
+      });
+      setTransferTo('');
+      fetchQueue();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

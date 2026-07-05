@@ -1,5 +1,13 @@
 import { useState, useEffect } from 'react';
-import { supabase, Visit, Patient, Department } from '../lib/supabase';
+import {
+  getVisits,
+  getDepartments,
+  getQueue,
+  getStats,
+  Visit,
+  Department,
+  Stats,
+} from '../lib/api';
 import { useAuth } from '../lib/auth';
 import {
   Users,
@@ -17,13 +25,13 @@ import {
 
 export function DashboardPage() {
   const { profile } = useAuth();
-  const [stats, setStats] = useState({
-    totalPatients: 0,
-    activeVisits: 0,
-    completedToday: 0,
-    waitingPatients: 0,
+  const [stats, setStats] = useState<Stats>({
+    total_patients: 0,
+    waiting: 0,
+    in_progress: 0,
+    completed_today: 0,
   });
-  const [recentVisits, setRecentVisits] = useState<(Visit & { patient: Patient })[]>([]);
+  const [recentVisits, setRecentVisits] = useState<Visit[]>([]);
   const [queueByDepartment, setQueueByDepartment] = useState<Record<string, number>>({});
   const [departments, setDepartments] = useState<Department[]>([]);
 
@@ -35,63 +43,27 @@ export function DashboardPage() {
 
   const fetchDashboardData = async () => {
     try {
-      // Fetch total patients
-      const { count: totalPatients } = await supabase.from('patients').select('id', { count: 'exact', head: true });
-
-      // Fetch active visits
-      const { count: activeVisits } = await supabase
-        .from('visits')
-        .select('id', { count: 'exact', head: true })
-        .in('status', ['waiting', 'in_progress']);
-
-      // Fetch completed today
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const { count: completedToday } = await supabase
-        .from('visits')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'completed')
-        .gte('completed_at', today.toISOString());
-
-      // Fetch waiting patients
-      const { count: waitingPatients } = await supabase
-        .from('queue_entries')
-        .select('id', { count: 'exact', head: true })
-        .eq('is_called', false);
-
-      setStats({
-        totalPatients: totalPatients || 0,
-        activeVisits: activeVisits || 0,
-        completedToday: completedToday || 0,
-        waitingPatients: waitingPatients || 0,
-      });
+      // Fetch stats
+      const statsData = await getStats();
+      setStats(statsData);
 
       // Fetch recent visits
-      const { data: visits } = await supabase
-        .from('visits')
-        .select('*, patient:patients(*)')
-        .order('created_at', { ascending: false })
-        .limit(8);
-
-      if (visits) setRecentVisits(visits as unknown as (Visit & { patient: Patient })[]);
+      const visits = await getVisits();
+      setRecentVisits(visits.slice(0, 8));
 
       // Fetch departments
-      const { data: depts } = await supabase.from('departments').select('*').order('display_order');
-      if (depts) {
-        setDepartments(depts as Department[]);
+      const depts = await getDepartments();
+      setDepartments(depts);
 
-        // Fetch queue count by department
-        const queueCounts: Record<string, number> = {};
-        for (const dept of depts) {
-          const { count } = await supabase
-            .from('queue_entries')
-            .select('id', { count: 'exact', head: true })
-            .eq('department_id', dept.id)
-            .eq('is_called', false);
-          queueCounts[dept.id] = count || 0;
+      // Fetch queue counts
+      const queueData = await getQueue();
+      const counts: Record<string, number> = {};
+      for (const entry of queueData) {
+        if (!entry.is_called) {
+          counts[entry.department_id] = (counts[entry.department_id] || 0) + 1;
         }
-        setQueueByDepartment(queueCounts);
       }
+      setQueueByDepartment(counts);
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
     }
@@ -135,7 +107,7 @@ export function DashboardPage() {
             </div>
             <TrendingUp className="w-5 h-5 text-emerald-400" />
           </div>
-          <p className="text-3xl font-bold text-white">{stats.totalPatients}</p>
+          <p className="text-3xl font-bold text-white">{stats.total_patients}</p>
           <p className="text-sm text-slate-400">Total Patients</p>
         </div>
 
@@ -145,7 +117,7 @@ export function DashboardPage() {
               <Clock className="w-6 h-6 text-amber-400" />
             </div>
           </div>
-          <p className="text-3xl font-bold text-white">{stats.activeVisits}</p>
+          <p className="text-3xl font-bold text-white">{stats.in_progress}</p>
           <p className="text-sm text-slate-400">Active Visits</p>
         </div>
 
@@ -155,7 +127,7 @@ export function DashboardPage() {
               <CheckCircle2 className="w-6 h-6 text-emerald-400" />
             </div>
           </div>
-          <p className="text-3xl font-bold text-white">{stats.completedToday}</p>
+          <p className="text-3xl font-bold text-white">{stats.completed_today}</p>
           <p className="text-sm text-slate-400">Completed Today</p>
         </div>
 
@@ -165,7 +137,7 @@ export function DashboardPage() {
               <Activity className="w-6 h-6 text-purple-400" />
             </div>
           </div>
-          <p className="text-3xl font-bold text-white">{stats.waitingPatients}</p>
+          <p className="text-3xl font-bold text-white">{stats.waiting}</p>
           <p className="text-sm text-slate-400">In Queue</p>
         </div>
       </div>

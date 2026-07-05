@@ -1,5 +1,17 @@
 import { useState, useEffect } from 'react';
-import { supabase, Patient, Visit, Department, QueueEntry } from '../lib/supabase';
+import {
+  getPatients,
+  getVisits,
+  getDepartments,
+  getQueue,
+  createPatient,
+  createVisit,
+  createQueueEntry,
+  Patient,
+  Visit,
+  Department,
+  QueueEntry,
+} from '../lib/api';
 import { useAuth } from '../lib/auth';
 import {
   Search,
@@ -37,11 +49,12 @@ export function ReceptionPage() {
   const [activeTab, setActiveTab] = useState<'search' | 'register' | 'queue'>('search');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [patients, setPatients] = useState<Patient[]>([]);
   const [searchResults, setSearchResults] = useState<Patient[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(false);
-  const [recentVisits, setRecentVisits] = useState<(Visit & { patient: Patient })[]>([]);
-  const [queue, setQueue] = useState<(QueueEntry & { visit: Visit & { patient: Patient } })[]>([]);
+  const [recentVisits, setRecentVisits] = useState<Visit[]>([]);
+  const [queue, setQueue] = useState<QueueEntry[]>([]);
 
   const [patientForm, setPatientForm] = useState<PatientForm>({
     first_name: '',
@@ -67,82 +80,91 @@ export function ReceptionPage() {
     fetchDepartments();
     fetchRecentVisits();
     fetchQueue();
+    fetchPatients();
   }, []);
 
+  const fetchPatients = async () => {
+    try {
+      const data = await getPatients();
+      setPatients(data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const fetchDepartments = async () => {
-    const { data } = await supabase.from('departments').select('*').eq('is_active', true).order('display_order');
-    if (data) setDepartments(data as Department[]);
+    try {
+      const data = await getDepartments();
+      setDepartments(data);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const fetchRecentVisits = async () => {
-    const { data } = await supabase
-      .from('visits')
-      .select('*, patient:patients(*)')
-      .order('created_at', { ascending: false })
-      .limit(10);
-    if (data) setRecentVisits(data as unknown as (Visit & { patient: Patient })[]);
+    try {
+      const data = await getVisits();
+      setRecentVisits(data.slice(0, 10));
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const fetchQueue = async () => {
-    const { data } = await supabase
-      .from('queue_entries')
-      .select('*, visit:visits(*, patient:patients(*)), department:departments(*)')
-      .eq('is_called', false)
-      .order('position');
-    if (data) setQueue(data as unknown as (QueueEntry & { visit: Visit & { patient: Patient } })[]);
+    try {
+      const data = await getQueue();
+      setQueue(data);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const searchPatients = async () => {
+  const searchPatients = () => {
     if (!searchQuery.trim()) return;
-    setLoading(true);
-    const { data } = await supabase
-      .from('patients')
-      .select('*')
-      .or(`first_name.ilike.%${searchQuery}%,last_name.ilike.%${searchQuery}%,medical_record_number.ilike.%${searchQuery}%,phone.ilike.%${searchQuery}%`)
-      .limit(10);
-    if (data) setSearchResults(data as Patient[]);
-    setLoading(false);
+    const query = searchQuery.toLowerCase();
+    const results = patients.filter(
+      (p) =>
+        p.first_name.toLowerCase().includes(query) ||
+        p.last_name.toLowerCase().includes(query) ||
+        p.medical_record_number.toLowerCase().includes(query) ||
+        p.phone?.toLowerCase().includes(query)
+    );
+    setSearchResults(results.slice(0, 10));
   };
 
   const registerPatient = async () => {
     setLoading(true);
     try {
-      const { data: patientData, error: patientError } = await supabase
-        .from('patients')
-        .insert({
-          first_name: patientForm.first_name,
-          last_name: patientForm.last_name,
-          date_of_birth: patientForm.date_of_birth || null,
-          gender: patientForm.gender || null,
-          phone: patientForm.phone || null,
-          email: patientForm.email || null,
-          address: patientForm.address || null,
-          emergency_contact_name: patientForm.emergency_contact_name || null,
-          emergency_contact_phone: patientForm.emergency_contact_phone || null,
-          blood_type: patientForm.blood_type || null,
-          allergies: patientForm.allergies ? patientForm.allergies.split(',').map((a) => a.trim()) : [],
-        })
-        .select()
-        .single();
+      const patient = await createPatient({
+        first_name: patientForm.first_name,
+        last_name: patientForm.last_name,
+        date_of_birth: patientForm.date_of_birth || null,
+        gender: patientForm.gender || null,
+        phone: patientForm.phone || null,
+        email: patientForm.email || null,
+        address: patientForm.address || null,
+        emergency_contact_name: patientForm.emergency_contact_name || null,
+        emergency_contact_phone: patientForm.emergency_contact_phone || null,
+        blood_type: patientForm.blood_type || null,
+        allergies: patientForm.allergies ? patientForm.allergies.split(',').map((a) => a.trim()) : [],
+      });
 
-      if (patientError) throw patientError;
-      if (patientData) {
-        setSelectedPatient(patientData as Patient);
-        setPatientForm({
-          first_name: '',
-          last_name: '',
-          date_of_birth: '',
-          gender: '',
-          phone: '',
-          email: '',
-          address: '',
-          emergency_contact_name: '',
-          emergency_contact_phone: '',
-          blood_type: '',
-          allergies: '',
-        });
-        setActiveTab('search');
-      }
+      setSelectedPatient(patient);
+      setPatientForm({
+        first_name: '',
+        last_name: '',
+        date_of_birth: '',
+        gender: '',
+        phone: '',
+        email: '',
+        address: '',
+        emergency_contact_name: '',
+        emergency_contact_phone: '',
+        blood_type: '',
+        allergies: '',
+      });
+      setActiveTab('search');
+      fetchPatients();
     } catch (err) {
       console.error(err);
     } finally {
@@ -150,58 +172,33 @@ export function ReceptionPage() {
     }
   };
 
-  const createVisit = async () => {
+  const createNewVisit = async () => {
     if (!selectedPatient) return;
     setLoading(true);
 
     try {
-      const receptionDept = departments.find((d) => d.code === 'RECEPTION');
       const triageDept = departments.find((d) => d.code === 'TRIAGE');
 
-      const ticketNum = `R${new Date().toISOString().slice(2, 10).replace(/-/g, '')}-${String(
-        Math.floor(Math.random() * 900) + 100
-      )}`;
+      const visit = await createVisit({
+        patient_id: selectedPatient.id,
+        priority: visitForm.priority,
+        chief_complaint: visitForm.chief_complaint || null,
+        notes: visitForm.notes || null,
+        created_by: profile?.id,
+      });
 
-      const { data: visitData, error: visitError } = await supabase
-        .from('visits')
-        .insert({
-          ticket_number: ticketNum,
-          patient_id: selectedPatient.id,
-          current_department_id: receptionDept?.id,
-          status: 'waiting',
-          priority: visitForm.priority,
-          chief_complaint: visitForm.chief_complaint || null,
-          notes: visitForm.notes || null,
-          created_by: profile?.id,
-        })
-        .select()
-        .single();
-
-      if (visitError) throw visitError;
-
-      if (visitData) {
-        // Create visit steps for each department
-        const steps = departments.map((dept, index) => ({
-          visit_id: (visitData as Visit).id,
-          department_id: dept.id,
-          status: index === 0 ? 'in_progress' : 'pending',
-        }));
-
-        await supabase.from('visit_steps').insert(steps);
-
-        // Add to queue for triage
-        const queuePosition = queue.filter((q) => q.department_id === triageDept?.id).length + 1;
-        await supabase.from('queue_entries').insert({
-          visit_id: (visitData as Visit).id,
-          department_id: triageDept?.id,
-          position: queuePosition,
+      // Add to queue for triage
+      if (triageDept) {
+        await createQueueEntry({
+          visit_id: visit.id,
+          department_id: triageDept.id,
         });
-
-        setVisitForm({ chief_complaint: '', priority: 'normal', notes: '' });
-        setSelectedPatient(null);
-        fetchRecentVisits();
-        fetchQueue();
       }
+
+      setVisitForm({ chief_complaint: '', priority: 'normal', notes: '' });
+      setSelectedPatient(null);
+      fetchRecentVisits();
+      fetchQueue();
     } catch (err) {
       console.error(err);
     } finally {
@@ -371,7 +368,7 @@ export function ReceptionPage() {
 
                   <div className="flex gap-4">
                     <button
-                      onClick={createVisit}
+                      onClick={createNewVisit}
                       disabled={loading || !selectedPatient}
                       className="flex-1 py-3 bg-cyan-600 text-white rounded-lg font-medium hover:bg-cyan-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                     >

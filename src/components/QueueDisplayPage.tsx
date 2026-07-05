@@ -1,5 +1,10 @@
 import { useState, useEffect } from 'react';
-import { supabase, QueueEntry, Department } from '../lib/supabase';
+import {
+  getQueue,
+  getDepartments,
+  QueueEntry,
+  Department,
+} from '../lib/api';
 import {
   Monitor,
   Volume2,
@@ -10,8 +15,7 @@ import {
 } from 'lucide-react';
 
 export function QueueDisplayPage() {
-  const [currentCalling] = useState<(QueueEntry & { visit: any; department: any })[]>([]);
-  const [allQueues, setAllQueues] = useState<Record<string, (QueueEntry & { visit: any; department: any })[]>>({});
+  const [allQueues, setAllQueues] = useState<Record<string, QueueEntry[]>>({});
   const [departments, setDepartments] = useState<Department[]>([]);
   const [recentlyCalled, setRecentlyCalled] = useState<{ ticket: string; patient: string; room: string; time: Date }[]>([]);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
@@ -24,47 +28,43 @@ export function QueueDisplayPage() {
   }, []);
 
   const fetchData = async () => {
-    const { data: depts } = await supabase.from('departments').select('*').eq('is_active', true).order('display_order');
-    if (depts) {
-      setDepartments(depts as Department[]);
+    try {
+      const depts = await getDepartments();
+      setDepartments(depts.filter((d) => d.is_active));
 
-      // Fetch queue entries for each department
-      const queues: Record<string, typeof currentCalling> = {};
+      // Fetch all queue entries
+      const allEntries = await getQueue();
 
-      for (const dept of depts) {
-        const { data: entries } = await supabase
-          .from('queue_entries')
-          .select('*, visit:visits(*, patient:patients(*)), department:departments(*)')
-          .eq('department_id', dept.id)
-          .order('position')
-          .limit(10);
+      // Group by department
+      const queues: Record<string, QueueEntry[]> = {};
+      for (const entry of allEntries) {
+        if (!queues[entry.department_id]) {
+          queues[entry.department_id] = [];
+        }
+        queues[entry.department_id].push(entry);
 
-        if (entries) {
-          queues[dept.id] = entries as typeof currentCalling;
+        // Find called patients
+        if (entry.is_called) {
+          const ticketInfo = {
+            ticket: entry.visit?.ticket_number || '',
+            patient: `${entry.visit?.patient?.first_name?.[0] || ''}. ${entry.visit?.patient?.last_name || ''}`,
+            room: entry.room_number || entry.department?.code || '',
+            time: new Date(),
+          };
 
-          // Find called patients
-          const called = entries.filter((e: any) => e.is_called);
-          if (called.length > 0) {
-            const lastCalled = called[called.length - 1];
-            const ticketInfo = {
-              ticket: lastCalled.visit?.ticket_number,
-              patient: `${lastCalled.visit?.patient?.first_name?.[0]}. ${lastCalled.visit?.patient?.last_name}`,
-              room: lastCalled.room_number || dept.code,
-              time: new Date(),
-            };
-
-            setRecentlyCalled((prev) => {
-              if (prev[0]?.ticket !== ticketInfo.ticket) {
-                return [ticketInfo, ...prev].slice(0, 5);
-              }
-              return prev;
-            });
-          }
+          setRecentlyCalled((prev) => {
+            if (prev[0]?.ticket !== ticketInfo.ticket) {
+              return [ticketInfo, ...prev].slice(0, 5);
+            }
+            return prev;
+          });
         }
       }
 
       setAllQueues(queues);
       setLastUpdate(new Date());
+    } catch (err) {
+      console.error(err);
     }
   };
 

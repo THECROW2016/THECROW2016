@@ -1,5 +1,14 @@
 import { useState, useEffect } from 'react';
-import { supabase, Visit, QueueEntry, Department } from '../lib/supabase';
+import {
+  getQueue,
+  getDepartments,
+  updateVisitStep,
+  updateVisit,
+  deleteQueueEntry,
+  createQueueEntry,
+  QueueEntry,
+  Department,
+} from '../lib/api';
 import { useAuth } from '../lib/auth';
 import {
   Stethoscope,
@@ -16,9 +25,9 @@ import {
 
 export function ConsultationPage() {
   useAuth();
-  const [queue, setQueue] = useState<(QueueEntry & { visit: Visit & { patient: any } })[]>([]);
+  const [queue, setQueue] = useState<QueueEntry[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [selectedEntry, setSelectedEntry] = useState<(QueueEntry & { visit: Visit & { patient: any } }) | null>(null);
+  const [selectedEntry, setSelectedEntry] = useState<QueueEntry | null>(null);
   const [loading, setLoading] = useState(false);
   const [diagnosis, setDiagnosis] = useState('');
   const [prescription, setPrescription] = useState('');
@@ -34,19 +43,16 @@ export function ConsultationPage() {
   }, []);
 
   const fetchData = async () => {
-    const { data: depts } = await supabase.from('departments').select('*').eq('is_active', true);
-    if (depts) {
-      setDepartments(depts as Department[]);
+    try {
+      const depts = await getDepartments();
+      setDepartments(depts.filter((d) => d.is_active));
       const consultation = depts.find((d) => d.code === 'CONSULTATION');
       if (consultation) {
-        const { data } = await supabase
-          .from('queue_entries')
-          .select('*, visit:visits(*, patient:patients(*)), department:departments(*)')
-          .eq('department_id', consultation.id)
-          .eq('is_called', false)
-          .order('position');
-        if (data) setQueue(data as unknown as typeof queue);
+        const data = await getQueue(consultation.id);
+        setQueue(data.filter((e) => !e.is_called));
       }
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -59,76 +65,61 @@ Prescription: ${prescription}
 Lab Orders: ${labOrders}
 Notes: ${notes}`;
 
-    // Update visit step
-    await supabase
-      .from('visit_steps')
-      .update({
-        status: 'completed',
-        completed_at: new Date().toISOString(),
-        notes: consultationNotes,
-      })
-      .eq('visit_id', selectedEntry.visit_id)
-      .eq('department_id', selectedEntry.department_id);
-
-    if (endVisit) {
-      // End the visit completely
-      await supabase
-        .from('visits')
-        .update({
+    try {
+      // Update visit step
+      const steps = await fetch(`/api/visit-steps/${selectedEntry.visit_id}`).then(r => r.json());
+      const currentStep = steps.find((s: any) => s.department_id === selectedEntry.department_id);
+      if (currentStep) {
+        await updateVisitStep(currentStep.id, {
           status: 'completed',
           completed_at: new Date().toISOString(),
           notes: consultationNotes,
-        })
-        .eq('id', selectedEntry.visit_id);
+        });
+      }
 
-      await supabase.from('queue_entries').delete().eq('id', selectedEntry.id);
-    } else if (transferTo) {
-      const targetDept = departments.find((d) => d.id === transferTo);
-      if (targetDept) {
-        // Update visit current department
-        await supabase
-          .from('visits')
-          .update({
+      if (endVisit) {
+        // End the visit completely
+        await updateVisit(selectedEntry.visit_id, {
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+          notes: consultationNotes,
+        });
+
+        await deleteQueueEntry(selectedEntry.id);
+      } else if (transferTo) {
+        const targetDept = departments.find((d) => d.id === transferTo);
+        if (targetDept) {
+          // Update visit current department
+          await updateVisit(selectedEntry.visit_id, {
             current_department_id: targetDept.id,
             status: 'waiting',
             notes: consultationNotes,
-          })
-          .eq('id', selectedEntry.visit_id);
+          });
 
-        // Delete current queue entry
-        await supabase.from('queue_entries').delete().eq('id', selectedEntry.id);
+          // Delete current queue entry
+          await deleteQueueEntry(selectedEntry.id);
 
-        // Create new queue entry for target department
-        const { data: existingQueue } = await supabase
-          .from('queue_entries')
-          .select('id')
-          .eq('department_id', targetDept.id)
-          .eq('is_called', false);
-
-        await supabase.from('queue_entries').insert({
-          visit_id: selectedEntry.visit_id,
-          department_id: targetDept.id,
-          position: (existingQueue?.length || 0) + 1,
-        });
-
-        // Update next step to in_progress
-        await supabase
-          .from('visit_steps')
-          .update({ status: 'in_progress' })
-          .eq('visit_id', selectedEntry.visit_id)
-          .eq('department_id', targetDept.id);
+          // Create new queue entry for target department
+          await createQueueEntry({
+            visit_id: selectedEntry.visit_id,
+            department_id: targetDept.id,
+          });
+        }
       }
-    }
 
-    setSelectedEntry(null);
-    setDiagnosis('');
-    setPrescription('');
-    setLabOrders('');
-    setNotes('');
-    setTransferTo('');
-    setEndVisit(false);
-    fetchData();
-    setLoading(false);
+      setSelectedEntry(null);
+      setDiagnosis('');
+      setPrescription('');
+      setLabOrders('');
+      setNotes('');
+      setTransferTo('');
+      setEndVisit(false);
+      fetchData();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

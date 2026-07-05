@@ -1,6 +1,6 @@
 # Hospital Management System
 
-A comprehensive hospital queue and workflow management system built with React, TypeScript, and Supabase.
+A comprehensive hospital queue and workflow management system built with React, TypeScript, and Express. Deployable on Railway.
 
 ## Features
 
@@ -22,8 +22,9 @@ A comprehensive hospital queue and workflow management system built with React, 
 ## Tech Stack
 
 - **Frontend**: React, TypeScript, Tailwind CSS
-- **Backend**: Supabase (PostgreSQL, Auth, RLS)
+- **Backend**: Express.js, SQLite (better-sqlite3)
 - **Build Tool**: Vite
+- **Deployment**: Railway / Docker
 
 ## Getting Started
 
@@ -42,15 +43,21 @@ cd <project-name>
 # Install dependencies
 npm install
 
-# Start development server
+# Start development server (frontend only)
 npm run dev
+```
+
+### Production
+
+```bash
+# Build and start server
+npm run build
+npm start
 ```
 
 ### Demo Credentials
 
-| Role | Email | Password |
-|------|-------|----------|
-| Admin | admin@hospital.com | demo123 |
+The system auto-logs in as admin. No credentials needed for demo.
 
 ## User Roles
 
@@ -70,7 +77,6 @@ npm run dev
 src/
 ├── components/
 │   ├── AdminPage.tsx       # User and department management
-│   ├── AuthPage.tsx        # Login interface
 │   ├── ConsultationPage.tsx # Doctor consultations
 │   ├── DashboardLayout.tsx  # Main layout wrapper
 │   ├── DashboardPage.tsx    # Statistics dashboard
@@ -80,11 +86,12 @@ src/
 │   ├── ReceptionPage.tsx   # Patient registration
 │   └── TriagePage.tsx      # Triage operations
 ├── lib/
-│   ├── auth.tsx           # Authentication context
-│   └── supabase.ts        # Supabase client
+│   ├── api.ts             # API client
+│   └── auth.tsx           # Authentication context
 ├── App.tsx                # Main app component
 ├── main.tsx               # Entry point
 └── index.css             # Global styles
+server.ts                   # Express server with SQLite
 ```
 
 ## Database Schema
@@ -101,14 +108,25 @@ src/
 ```bash
 npm run dev      # Start development server
 npm run build    # Build for production
-npm run preview  # Preview production build
+npm start        # Start production server
 npm run lint     # Run ESLint
+```
+
+## Deployment
+
+### Railway
+
+1. Connect your GitHub repository to Railway
+2. Railway will detect the Dockerfile automatically
+3. Deploy
+
+### Docker
+
+```bash
+docker build -t hospital-system .
+docker run -p 3000:3000 hospital-system
 ```
 
 ## License
 
 MIT
-
----
-
-[![Open in Bolt](https://bolt.new/static/open-in-bolt.svg)](https://bolt.new/~/sb1-aymzq1xn)
