@@ -104,6 +104,13 @@ db.exec(`
   );
 `);
 
+// Add password column to profiles
+try {
+  db.exec('ALTER TABLE profiles ADD COLUMN password TEXT');
+} catch (e) {
+  // Column already exists
+}
+
 // Seed initial data
 const seedData = () => {
   const profileCount = db.prepare('SELECT COUNT(*) as count FROM profiles').get() as { count: number };
@@ -122,14 +129,20 @@ const seedData = () => {
       insertDept.run(dept.id, dept.name, dept.code, dept.prefix, dept.display_order);
     }
 
-    // Seed profiles
+    // Seed profiles with passwords (in production, use bcrypt)
     const profiles = [
-      { id: uuidv4(), email: 'admin@hospital.com', full_name: 'Demo Admin', role: 'admin' },
+      { id: uuidv4(), email: 'admin@hospital.com', full_name: 'Admin User', role: 'admin', password: 'demo123' },
+      { id: uuidv4(), email: 'superadmin@hospital.com', full_name: 'Super Admin', role: 'superadmin', password: 'demo123' },
+      { id: uuidv4(), email: 'reception@hospital.com', full_name: 'Reception Staff', role: 'receptionist', password: 'demo123' },
+      { id: uuidv4(), email: 'nurse@hospital.com', full_name: 'Nurse Jane', role: 'nurse', password: 'demo123' },
+      { id: uuidv4(), email: 'doctor@hospital.com', full_name: 'Dr. Smith', role: 'doctor', password: 'demo123' },
+      { id: uuidv4(), email: 'lab@hospital.com', full_name: 'Lab Technician', role: 'lab_tech', password: 'demo123' },
+      { id: uuidv4(), email: 'pharmacy@hospital.com', full_name: 'Pharmacy Staff', role: 'pharmacist', password: 'demo123' },
     ];
 
-    const insertProfile = db.prepare('INSERT INTO profiles (id, email, full_name, role) VALUES (?, ?, ?, ?)');
+    const insertProfile = db.prepare('INSERT INTO profiles (id, email, full_name, role, password) VALUES (?, ?, ?, ?, ?)');
     for (const profile of profiles) {
-      insertProfile.run(profile.id, profile.email, profile.full_name, profile.role);
+      insertProfile.run(profile.id, profile.email, profile.full_name, profile.role, profile.password);
     }
   }
 };
@@ -138,9 +151,46 @@ seedData();
 
 // API Routes
 
-// Auth (simplified - auto-login as admin)
+// Auth - Login
+app.post('/api/auth/login', (req, res) => {
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password required' });
+  }
+
+  const profile = db.prepare('SELECT * FROM profiles WHERE email = ? AND is_active = 1').get(email) as any;
+
+  if (!profile) {
+    return res.status(401).json({ error: 'Invalid email or password' });
+  }
+
+  if (profile.password !== password) {
+    return res.status(401).json({ error: 'Invalid email or password' });
+  }
+
+  // Return user without password
+  const { password: _, ...safeProfile } = profile;
+  res.json({
+    user: { id: profile.id, email: profile.email },
+    profile: safeProfile
+  });
+});
+
+// Auth - Get session (check if logged in)
 app.get('/api/auth/session', (req, res) => {
-  const profile = db.prepare('SELECT * FROM profiles WHERE email = ?').get('admin@hospital.com') as any;
+  const userId = req.headers['x-user-id'] as string;
+
+  if (!userId) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+
+  const profile = db.prepare('SELECT id, email, full_name, role, department_id, is_active, created_at, updated_at FROM profiles WHERE id = ?').get(userId) as any;
+
+  if (!profile) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+
   res.json({
     user: { id: profile.id, email: profile.email },
     profile

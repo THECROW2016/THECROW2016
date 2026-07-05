@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { AuthProvider, useAuth } from './lib/auth';
+import { AuthPage } from './components/AuthPage';
 import { DashboardLayout } from './components/DashboardLayout';
 import { DashboardPage } from './components/DashboardPage';
 import { ReceptionPage } from './components/ReceptionPage';
@@ -11,8 +12,9 @@ import { QueueDisplayPage } from './components/QueueDisplayPage';
 import { AdminPage } from './components/AdminPage';
 
 function AppContent() {
-  const { profile, loading } = useAuth();
+  const { profile, loading, signIn } = useAuth();
   const [currentPage, setCurrentPage] = useState('dashboard');
+  const [loginLoading, setLoginLoading] = useState(false);
 
   if (loading) {
     return (
@@ -23,6 +25,18 @@ function AppContent() {
         </div>
       </div>
     );
+  }
+
+  // Show login page if not authenticated
+  if (!profile) {
+    const handleLogin = async (email: string, password: string) => {
+      setLoginLoading(true);
+      const result = await signIn(email, password);
+      setLoginLoading(false);
+      return result;
+    };
+
+    return <AuthPage onLogin={handleLogin} loading={loginLoading} />;
   }
 
   // Queue display is a full-screen page

@@ -1,10 +1,12 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { getSession, Profile } from './api';
+import { login as apiLogin, getSession, Profile } from './api';
 
 type AuthContextType = {
   user: { id: string; email: string } | null;
   profile: Profile | null;
   loading: boolean;
+  signIn: (email: string, password: string) => Promise<{ error?: string }>;
+  signOut: () => void;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -15,24 +17,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Auto-login with demo credentials (server handles this)
-    const autoLogin = async () => {
-      try {
-        const data = await getSession();
-        setUser(data.user);
-        setProfile(data.profile);
-      } catch (error) {
-        console.error('Failed to get session:', error);
-      } finally {
-        setLoading(false);
+    // Check for existing session
+    const checkSession = async () => {
+      const userId = localStorage.getItem('userId');
+      if (userId) {
+        try {
+          const data = await getSession();
+          setUser(data.user);
+          setProfile(data.profile);
+        } catch (error) {
+          localStorage.removeItem('userId');
+        }
       }
+      setLoading(false);
     };
 
-    autoLogin();
+    checkSession();
   }, []);
 
+  const signIn = async (email: string, password: string): Promise<{ error?: string }> => {
+    try {
+      const data = await apiLogin(email, password);
+      setUser(data.user);
+      setProfile(data.profile);
+      localStorage.setItem('userId', data.user.id);
+      return {};
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : 'Login failed' };
+    }
+  };
+
+  const signOut = () => {
+    setUser(null);
+    setProfile(null);
+    localStorage.removeItem('userId');
+  };
+
   return (
-    <AuthContext.Provider value={{ user, profile, loading }}>
+    <AuthContext.Provider value={{ user, profile, loading, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );

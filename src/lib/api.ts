@@ -1,10 +1,12 @@
 const API_BASE = '/api';
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const userId = localStorage.getItem('userId');
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      ...(userId ? { 'x-user-id': userId } : {}),
       ...options?.headers,
     },
   });
@@ -107,6 +109,13 @@ export type Stats = {
 };
 
 // Auth API
+export async function login(email: string, password: string) {
+  return request<{ user: { id: string; email: string }; profile: Profile }>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  });
+}
+
 export async function getSession() {
   return request<{ user: { id: string; email: string }; profile: Profile }>('/auth/session');
 }
