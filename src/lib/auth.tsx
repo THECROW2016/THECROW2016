@@ -38,9 +38,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = async (email: string, password: string): Promise<{ error?: string }> => {
     try {
       const data = await apiLogin(email, password);
+      // Persist userId BEFORE updating state so any subsequent requests
+      // triggered by re-renders already have the x-user-id header available.
+      localStorage.setItem('userId', data.user.id);
       setUser(data.user);
       setProfile(data.profile);
-      localStorage.setItem('userId', data.user.id);
       return {};
     } catch (error) {
       return { error: error instanceof Error ? error.message : 'Login failed' };
