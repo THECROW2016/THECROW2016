@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { AuthProvider, useAuth } from './lib/auth';
-import { AuthPage } from './components/AuthPage';
 import { DashboardLayout } from './components/DashboardLayout';
 import { DashboardPage } from './components/DashboardPage';
 import { ReceptionPage } from './components/ReceptionPage';
@@ -12,7 +11,7 @@ import { QueueDisplayPage } from './components/QueueDisplayPage';
 import { AdminPage } from './components/AdminPage';
 
 function AppContent() {
-  const { user, profile, loading } = useAuth();
+  const { profile, loading } = useAuth();
   const [currentPage, setCurrentPage] = useState('dashboard');
 
   if (loading) {
@@ -26,8 +25,14 @@ function AppContent() {
     );
   }
 
-  if (!user || !profile) {
-    return <AuthPage />;
+  if (!profile) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-slate-400">Unable to load profile. Please refresh.</p>
+        </div>
+      </div>
+    );
   }
 
   // Queue display is a full-screen page

@@ -21,23 +21,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
+    // Auto-login with demo credentials
+    const autoLogin = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+
       if (session?.user) {
-        fetchProfile(session.user.id);
+        setSession(session);
+        setUser(session.user);
+        await fetchProfile(session.user.id);
       } else {
-        setLoading(false);
+        // Auto sign in with demo admin account
+        const { data } = await supabase.auth.signInWithPassword({
+          email: 'admin@hospital.com',
+          password: 'demo123'
+        });
+
+        if (data.session && data.user) {
+          setSession(data.session);
+          setUser(data.user);
+          await fetchProfile(data.user.id);
+        } else {
+          setLoading(false);
+        }
       }
-    });
+    };
+
+    autoLogin();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        (async () => {
-          await fetchProfile(session.user.id);
-        })();
+        fetchProfile(session.user.id);
       } else {
         setProfile(null);
         setLoading(false);
