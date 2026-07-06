@@ -346,32 +346,37 @@ app.post('/api/visits', (req, res) => {
   const id = uuidv4();
   const { patient_id, priority, chief_complaint, created_by } = req.body;
 
-  // Get reception department
-  const reception = db.prepare("SELECT * FROM departments WHERE code = 'RECEPTION'").get() as any;
-  if (!reception) return res.status(400).json({ error: 'Reception department not found' });
+  // Get triage department (first step after registration)
+  const triage = db.prepare("SELECT * FROM departments WHERE code = 'TRIAGE'").get() as any;
+  if (!triage) return res.status(400).json({ error: 'Triage department not found' });
 
-  // Generate ticket number
-  const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  // Generate human-readable ticket number: T-001, T-002 (resets daily)
   const countToday = db.prepare("SELECT COUNT(*) as count FROM visits WHERE date(created_at) = date('now')").get() as { count: number };
-  const ticketNumber = `R${today}${(countToday.count + 1).toString().padStart(3, '0')}`;
+  const ticketNumber = `T-${(countToday.count + 1).toString().padStart(3, '0')}`;
 
   try {
-    const stmt = db.prepare('INSERT INTO visits (id, ticket_number, patient_id, current_department_id, priority, chief_complaint, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)');
-    stmt.run(id, ticketNumber, patient_id, reception.id, priority || 'normal', chief_complaint || null, created_by || null);
+    const stmt = db.prepare('INSERT INTO visits (id, ticket_number, patient_id, current_department_id, status, priority, chief_complaint, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    stmt.run(id, ticketNumber, patient_id, triage.id, 'waiting', priority || 'normal', chief_complaint || null, created_by || null);
 
-    // Create visit steps for all departments
-    const departments = db.prepare('SELECT * FROM departments ORDER BY display_order').all() as any[];
+    // Create visit steps for all departments (straight workflow)
+    const departments = db.prepare('SELECT * FROM departments WHERE code != ? ORDER BY display_order').all('RECEPTION') as any[];
     const insertStep = db.prepare('INSERT INTO visit_steps (id, visit_id, department_id, status) VALUES (?, ?, ?, ?)');
-    for (const dept of departments) {
-      insertStep.run(uuidv4(), id, dept.id, 'pending');
-    }
+    departments.forEach((dept, index) => {
+      insertStep.run(uuidv4(), id, dept.id, index === 0 ? 'in_progress' : 'pending');
+    });
 
-    // Add to queue
-    const queueCount = db.prepare("SELECT COUNT(*) as count FROM queue_entries WHERE department_id = ?").get(reception.id) as { count: number };
+    // Add to queue for triage (first step)
+    const queueCount = db.prepare("SELECT COUNT(*) as count FROM queue_entries WHERE department_id = ?").get(triage.id) as { count: number };
     const insertQueue = db.prepare('INSERT INTO queue_entries (id, visit_id, department_id, position) VALUES (?, ?, ?, ?)');
-    insertQueue.run(uuidv4(), id, reception.id, queueCount.count + 1);
+    insertQueue.run(uuidv4(), id, triage.id, queueCount.count + 1);
 
-    const visit = db.prepare('SELECT * FROM visits WHERE id = ?').get(id);
+    const visit = db.prepare(`
+      SELECT v.*, p.first_name, p.last_name, p.phone, p.medical_record_number
+      FROM visits v
+      LEFT JOIN patients p ON v.patient_id = p.id
+      WHERE v.id = ?
+    `).get(id);
+
     res.status(201).json(visit);
   } catch (error: any) {
     res.status(400).json({ error: error.message });
@@ -534,6 +539,70 @@ app.get('/api/stats', (req, res) => {
     waiting: waitingVisits.count,
     in_progress: inProgressVisits.count,
     completed_today: completedToday.count
+  });
+});
+
+// SMS Notification (simulated - logs to console)
+app.post('/api/sms/send', (req, res) => {
+  const { phone, message } = req.body;
+
+  if (!phone || !message) {
+    return res.status(400).json({ error: 'Phone and message required' });
+  }
+
+  // In production, integrate with SMS provider (Twilio, Africa's Talking, etc.)
+  console.log(`[SMS] To: ${phone}`);
+  console.log(`[SMS] Message: ${message}`);
+
+  res.json({
+    success: true,
+    message: 'SMS sent successfully (simulated)',
+    phone,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Send patient notification
+app.post('/api/notify/:visitId', (req, res) => {
+  const { visitId } = req.params;
+  const { type } = req.body; // 'called', 'next', 'reminder'
+
+  const visit = db.prepare(`
+    SELECT v.*, p.first_name, p.last_name, p.phone, d.name as department_name, d.code as department_code
+    FROM visits v
+    LEFT JOIN patients p ON v.patient_id = p.id
+    LEFT JOIN departments d ON v.current_department_id = d.id
+    WHERE v.id = ?
+  `).get(visitId) as any;
+
+  if (!visit) {
+    return res.status(404).json({ error: 'Visit not found' });
+  }
+
+  let message = '';
+  switch (type) {
+    case 'called':
+      message = `Hello ${visit.first_name}, your ticket ${visit.ticket_number} is now being called at ${visit.department_name}. Please proceed to the department immediately.`;
+      break;
+    case 'next':
+      message = `Hello ${visit.first_name}, you are next in queue at ${visit.department_name}. Ticket: ${visit.ticket_number}. Please be ready.`;
+      break;
+    case 'reminder':
+      message = `Reminder: Your visit ticket ${visit.ticket_number} is still in queue. Current department: ${visit.department_name}.`;
+      break;
+    default:
+      message = `Hospital Update: Ticket ${visit.ticket_number} - ${visit.department_name}`;
+  }
+
+  console.log(`[NOTIFICATION] ${type} for ${visit.first_name} ${visit.last_name}`);
+  console.log(`[NOTIFICATION] Phone: ${visit.phone}`);
+  console.log(`[NOTIFICATION] Message: ${message}`);
+
+  res.json({
+    success: true,
+    type,
+    phone: visit.phone,
+    message
   });
 });
 

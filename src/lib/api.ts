@@ -6,8 +6,8 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     ...options,
     headers: {
       'Content-Type': 'application/json',
-      ...options?.headers,
       ...(userId ? { 'x-user-id': userId } : {}),
+      ...options?.headers,
     },
   });
 
@@ -256,4 +256,20 @@ export async function callNextPatient(departmentId: string, roomNumber?: string)
 // Stats API
 export async function getStats() {
   return request<Stats>('/stats');
+}
+
+// SMS API
+export async function sendSMS(phone: string, message: string) {
+  return request<{ success: boolean; message: string; phone: string; timestamp: string }>('/sms/send', {
+    method: 'POST',
+    body: JSON.stringify({ phone, message }),
+  });
+}
+
+// Notification API
+export async function notifyPatient(visitId: string, type: 'called' | 'next' | 'reminder') {
+  return request<{ success: boolean; type: string; phone: string; message: string }>(`/notify/${visitId}`, {
+    method: 'POST',
+    body: JSON.stringify({ type }),
+  });
 }

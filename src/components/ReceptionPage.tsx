@@ -7,12 +7,15 @@ import {
   createPatient,
   createVisit,
   createQueueEntry,
+  notifyPatient,
   Patient,
   Visit,
   Department,
   QueueEntry,
 } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { useNotifications } from '../lib/notifications';
+import { printTicket } from '../lib/printTicket';
 import {
   Search,
   UserPlus,
@@ -22,6 +25,9 @@ import {
   Mail,
   MapPin,
   Users,
+  Printer,
+  MessageSquare,
+  CheckCircle,
 } from 'lucide-react';
 
 type PatientForm = {
@@ -46,6 +52,7 @@ type VisitForm = {
 
 export function ReceptionPage() {
   const { profile } = useAuth();
+  const { addNotification } = useNotifications();
   const [activeTab, setActiveTab] = useState<'search' | 'register' | 'queue'>('search');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
@@ -177,8 +184,6 @@ export function ReceptionPage() {
     setLoading(true);
 
     try {
-      const triageDept = departments.find((d) => d.code === 'TRIAGE');
-
       const visit = await createVisit({
         patient_id: selectedPatient.id,
         priority: visitForm.priority,
@@ -187,13 +192,20 @@ export function ReceptionPage() {
         created_by: profile?.id,
       });
 
-      // Add to queue for triage
-      if (triageDept) {
-        await createQueueEntry({
-          visit_id: visit.id,
-          department_id: triageDept.id,
-        });
+      // Print ticket
+      printTicket(visit, selectedPatient);
+
+      // Send SMS notification if phone exists
+      if (selectedPatient.phone) {
+        try {
+          await notifyPatient(visit.id, 'next');
+          addNotification('success', 'SMS Sent', `Ticket ${visit.ticket_number} sent to ${selectedPatient.phone}`);
+        } catch {
+          console.log('SMS notification failed');
+        }
       }
+
+      addNotification('success', 'Ticket Created', `Ticket ${visit.ticket_number} for ${selectedPatient.first_name} ${selectedPatient.last_name}`);
 
       setVisitForm({ chief_complaint: '', priority: 'normal', notes: '' });
       setSelectedPatient(null);
@@ -201,6 +213,7 @@ export function ReceptionPage() {
       fetchQueue();
     } catch (err) {
       console.error(err);
+      addNotification('warning', 'Error', 'Failed to create visit');
     } finally {
       setLoading(false);
     }
@@ -372,8 +385,8 @@ export function ReceptionPage() {
                       disabled={loading || !selectedPatient}
                       className="flex-1 py-3 bg-cyan-600 text-white rounded-lg font-medium hover:bg-cyan-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                     >
-                      <Ticket className="w-5 h-5" />
-                      Generate Ticket
+                      <Printer className="w-5 h-5" />
+                      Generate & Print Ticket
                     </button>
                     <button
                       onClick={() => setSelectedPatient(null)}

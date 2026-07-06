@@ -1,5 +1,6 @@
 import { ReactNode, useState } from 'react';
 import { useAuth } from '../lib/auth';
+import { NotificationBell } from '../lib/notifications';
 import {
   LayoutDashboard,
   Users,
@@ -68,7 +69,6 @@ export function DashboardLayout({ children, currentPage, onNavigate }: Dashboard
 
   return (
     <div className="min-h-screen bg-slate-900">
-      {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-40 lg:hidden"
@@ -76,7 +76,6 @@ export function DashboardLayout({ children, currentPage, onNavigate }: Dashboard
         />
       )}
 
-      {/* Sidebar */}
       <aside
         className={`fixed top-0 left-0 h-full w-64 bg-slate-800 border-r border-slate-700 z-50 transform transition-transform duration-300 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
@@ -126,9 +125,7 @@ export function DashboardLayout({ children, currentPage, onNavigate }: Dashboard
         </div>
       </aside>
 
-      {/* Main content */}
       <div className="lg:pl-64">
-        {/* Header */}
         <header className="sticky top-0 z-30 bg-slate-800/80 backdrop-blur-xl border-b border-slate-700">
           <div className="flex items-center justify-between px-4 py-3">
             <button
@@ -140,54 +137,57 @@ export function DashboardLayout({ children, currentPage, onNavigate }: Dashboard
 
             <div className="flex-1 lg:flex-none" />
 
-            <div className="relative">
-              <button
-                onClick={() => setUserMenuOpen(!userMenuOpen)}
-                className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-700 transition-colors"
-              >
-                <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-full flex items-center justify-center">
-                  <span className="text-white font-semibold text-sm">
-                    {profile?.full_name.charAt(0).toUpperCase()}
-                  </span>
-                </div>
-                <div className="hidden sm:block text-left">
-                  <p className="text-sm font-medium text-white">{profile?.full_name}</p>
-                  <p className="text-xs text-slate-400">
-                    {profile?.role && roleLabels[profile.role]}
-                  </p>
-                </div>
-                <ChevronDown className="w-4 h-4 text-slate-400" />
-              </button>
+            <div className="flex items-center gap-3">
+              <NotificationBell />
 
-              {userMenuOpen && (
-                <>
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setUserMenuOpen(false)}
-                  />
-                  <div className="absolute right-0 top-full mt-2 w-48 bg-slate-800 border border-slate-700 rounded-xl shadow-xl z-50 overflow-hidden">
-                    <div className="p-3 border-b border-slate-700">
-                      <p className="font-medium text-white">{profile?.full_name}</p>
-                      <p className="text-sm text-slate-400">{profile?.email}</p>
-                    </div>
-                    <button
-                      onClick={() => {
-                        setUserMenuOpen(false);
-                        signOut();
-                      }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-red-400 hover:bg-red-600/20 transition-colors"
-                    >
-                      <LogOut className="w-4 h-4" />
-                      <span>Sign Out</span>
-                    </button>
+              <div className="relative">
+                <button
+                  onClick={() => setUserMenuOpen(!userMenuOpen)}
+                  className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-700 transition-colors"
+                >
+                  <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-full flex items-center justify-center">
+                    <span className="text-white font-semibold text-sm">
+                      {profile?.full_name.charAt(0).toUpperCase()}
+                    </span>
                   </div>
-                </>
-              )}
+                  <div className="hidden sm:block text-left">
+                    <p className="text-sm font-medium text-white">{profile?.full_name}</p>
+                    <p className="text-xs text-slate-400">
+                      {profile?.role && roleLabels[profile.role]}
+                    </p>
+                  </div>
+                  <ChevronDown className="w-4 h-4 text-slate-400" />
+                </button>
+
+                {userMenuOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setUserMenuOpen(false)}
+                    />
+                    <div className="absolute right-0 top-full mt-2 w-48 bg-slate-800 border border-slate-700 rounded-xl shadow-xl z-50 overflow-hidden">
+                      <div className="p-3 border-b border-slate-700">
+                        <p className="font-medium text-white">{profile?.full_name}</p>
+                        <p className="text-sm text-slate-400">{profile?.email}</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setUserMenuOpen(false);
+                          signOut();
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-red-400 hover:bg-red-600/20 transition-colors"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        <span>Sign Out</span>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </header>
 
-        {/* Page content */}
         <main className="p-4 lg:p-6">{children}</main>
       </div>
     </div>
