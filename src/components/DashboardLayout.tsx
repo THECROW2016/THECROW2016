@@ -33,8 +33,9 @@ const menuItems: MenuItem[] = [
   { icon: <TestTube className="w-5 h-5" />, label: 'Laboratory', path: 'lab', roles: ['lab_tech', 'admin', 'superadmin'] },
   { icon: <Pill className="w-5 h-5" />, label: 'Pharmacy', path: 'pharmacy', roles: ['pharmacist', 'admin', 'superadmin'] },
   { icon: <MonitorPlay className="w-5 h-5" />, label: 'Queue Display', path: 'display' },
-  { icon: <Users className="w-5 h-5" />, label: 'User Management', path: 'users', roles: ['admin', 'superadmin'] },
-  { icon: <Settings className="w-5 h-5" />, label: 'Settings', path: 'settings', roles: ['admin', 'superadmin'] },
+  { icon: <Building2 className="w-5 h-5" />, label: 'Hospital Accounts', path: 'superadmin', roles: ['superadmin'] },
+  { icon: <Users className="w-5 h-5" />, label: 'User Management', path: 'users', roles: ['admin'] },
+  { icon: <Settings className="w-5 h-5" />, label: 'Settings', path: 'settings', roles: ['admin'] },
 ];
 
 type DashboardLayoutProps = {

@@ -108,6 +108,31 @@ export type Stats = {
   completed_today: number;
 };
 
+export type HospitalSettings = {
+  id: string;
+  name: string;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  logo_url: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Hospital = {
+  id: string;
+  name: string;
+  code: string;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  logo_url: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 // Auth API
 export async function login(email: string, password: string) {
   return request<{ user: { id: string; email: string }; profile: Profile }>('/auth/login', {
@@ -271,5 +296,54 @@ export async function notifyPatient(visitId: string, type: 'called' | 'next' | '
   return request<{ success: boolean; type: string; phone: string; message: string }>(`/notify/${visitId}`, {
     method: 'POST',
     body: JSON.stringify({ type }),
+  });
+}
+
+// Hospital Settings API
+export async function getHospitalSettings() {
+  return request<HospitalSettings>('/hospital-settings');
+}
+
+export async function updateHospitalSettings(data: Partial<HospitalSettings>) {
+  return request<HospitalSettings>('/hospital-settings', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function uploadHospitalSettingsLogo(logoUrl: string) {
+  return request<HospitalSettings>('/hospital-settings/logo', {
+    method: 'POST',
+    body: JSON.stringify({ logo_url: logoUrl }),
+  });
+}
+
+// Hospitals API (Superadmin)
+export async function getHospitals() {
+  return request<Hospital[]>('/hospitals');
+}
+
+export async function createHospital(data: Partial<Hospital>) {
+  return request<Hospital>('/hospitals', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateHospital(id: string, data: Partial<Hospital>) {
+  return request<Hospital>(`/hospitals/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteHospital(id: string) {
+  return request(`/hospitals/${id}`, { method: 'DELETE' });
+}
+
+export async function uploadHospitalLogo(id: string, logoUrl: string) {
+  return request<Hospital>(`/hospitals/${id}/logo`, {
+    method: 'POST',
+    body: JSON.stringify({ logo_url: logoUrl }),
   });
 }

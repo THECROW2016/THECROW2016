@@ -20,12 +20,38 @@ const db = new Database(join(__dirname, 'hospital.db'));
 
 // Create tables
 db.exec(`
+  CREATE TABLE IF NOT EXISTS hospital_settings (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL DEFAULT 'Hospital Management System',
+    address TEXT,
+    phone TEXT,
+    email TEXT,
+    website TEXT,
+    logo_url TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS hospitals (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    code TEXT UNIQUE NOT NULL,
+    address TEXT,
+    phone TEXT,
+    email TEXT,
+    logo_url TEXT,
+    is_active INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
   CREATE TABLE IF NOT EXISTS profiles (
     id TEXT PRIMARY KEY,
     email TEXT UNIQUE NOT NULL,
     full_name TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'receptionist',
     department_id TEXT,
+    hospital_id TEXT,
     is_active INTEGER DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -111,8 +137,28 @@ try {
   // Column already exists
 }
 
+// Add hospital_id column to profiles
+try {
+  db.exec('ALTER TABLE profiles ADD COLUMN hospital_id TEXT');
+} catch (e) {
+  // Column already exists
+}
+
 // Seed initial data
 const seedData = () => {
+  // Seed hospital settings
+  const settingsCount = db.prepare('SELECT COUNT(*) as count FROM hospital_settings').get() as { count: number };
+  if (settingsCount.count === 0) {
+    db.prepare(`INSERT INTO hospital_settings (id, name, address, phone, email, website) VALUES (?, ?, ?, ?, ?, ?)`).run(
+      'default',
+      'General Hospital',
+      '123 Medical Center Drive, Healthcare City',
+      '+1-234-567-8900',
+      'info@generalhospital.com',
+      'www.generalhospital.com'
+    );
+  }
+
   const profileCount = db.prepare('SELECT COUNT(*) as count FROM profiles').get() as { count: number };
   if (profileCount.count === 0) {
     // Seed departments
@@ -540,6 +586,105 @@ app.get('/api/stats', (req, res) => {
     in_progress: inProgressVisits.count,
     completed_today: completedToday.count
   });
+});
+
+// Hospital Settings
+app.get('/api/hospital-settings', (req, res) => {
+  const settings = db.prepare('SELECT * FROM hospital_settings LIMIT 1').get() as any;
+  res.json(settings || null);
+});
+
+app.put('/api/hospital-settings', (req, res) => {
+  const { name, address, phone, email, website, logo_url } = req.body;
+
+  try {
+    db.prepare(`UPDATE hospital_settings SET name = ?, address = ?, phone = ?, email = ?, website = ?, logo_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 'default'`).run(
+      name, address || null, phone || null, email || null, website || null, logo_url || null
+    );
+    const settings = db.prepare('SELECT * FROM hospital_settings LIMIT 1').get();
+    res.json(settings);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Hospitals (Superadmin)
+app.get('/api/hospitals', (req, res) => {
+  const hospitals = db.prepare('SELECT * FROM hospitals ORDER BY created_at DESC').all();
+  res.json(hospitals);
+});
+
+app.post('/api/hospitals', (req, res) => {
+  const id = uuidv4();
+  const { name, code, address, phone, email } = req.body;
+
+  if (!name || !code) {
+    return res.status(400).json({ error: 'Name and code are required' });
+  }
+
+  try {
+    const stmt = db.prepare('INSERT INTO hospitals (id, name, code, address, phone, email) VALUES (?, ?, ?, ?, ?, ?)');
+    stmt.run(id, name, code, address || null, phone || null, email || null);
+    const hospital = db.prepare('SELECT * FROM hospitals WHERE id = ?').get(id);
+    res.status(201).json(hospital);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.put('/api/hospitals/:id', (req, res) => {
+  const { id } = req.params;
+  const { name, code, address, phone, email, is_active } = req.body;
+
+  try {
+    const stmt = db.prepare('UPDATE hospitals SET name = ?, code = ?, address = ?, phone = ?, email = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+    stmt.run(name, code, address || null, phone || null, email || null, is_active ? 1 : 0, id);
+    const hospital = db.prepare('SELECT * FROM hospitals WHERE id = ?').get(id);
+    res.json(hospital);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.delete('/api/hospitals/:id', (req, res) => {
+  const { id } = req.params;
+  db.prepare('DELETE FROM hospitals WHERE id = ?').run(id);
+  res.status(204).send();
+});
+
+// Hospital Logo Upload
+app.post('/api/hospitals/:id/logo', (req, res) => {
+  const { id } = req.params;
+  const { logo_url } = req.body;
+
+  if (!logo_url) {
+    return res.status(400).json({ error: 'Logo URL is required' });
+  }
+
+  try {
+    db.prepare('UPDATE hospitals SET logo_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(logo_url, id);
+    const hospital = db.prepare('SELECT * FROM hospitals WHERE id = ?').get(id);
+    res.json(hospital);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Hospital Settings Logo Upload
+app.post('/api/hospital-settings/logo', (req, res) => {
+  const { logo_url } = req.body;
+
+  if (!logo_url) {
+    return res.status(400).json({ error: 'Logo URL is required' });
+  }
+
+  try {
+    db.prepare("UPDATE hospital_settings SET logo_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 'default'").run(logo_url);
+    const settings = db.prepare('SELECT * FROM hospital_settings LIMIT 1').get();
+    res.json(settings);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
 });
 
 // SMS Notification (simulated - logs to console)

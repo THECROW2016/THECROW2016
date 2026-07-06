@@ -11,6 +11,7 @@ import { LabPage } from './components/LabPage';
 import { PharmacyPage } from './components/PharmacyPage';
 import { QueueDisplayPage } from './components/QueueDisplayPage';
 import { AdminPage } from './components/AdminPage';
+import { SuperAdminPage } from './components/SuperAdminPage';
 
 function AppContent() {
   const { profile, loading, signIn } = useAuth();
@@ -61,8 +62,8 @@ function AppContent() {
         return <PharmacyPage />;
       case 'users':
         return <AdminPage />;
-      case 'settings':
-        return <AdminPage />;
+      case 'superadmin':
+        return <SuperAdminPage />;
       default:
         return <DashboardPage />;
     }
